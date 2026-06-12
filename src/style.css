@@ -232,7 +232,8 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 3rem 0;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
 }
 
 /* Animations */
@@ -568,7 +569,7 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
     padding: 1rem 0 !important;
   }
   #btn-feedback-footer {
-    width: 100%;
+    width: auto;
   }
 }
 
@@ -716,7 +717,8 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
   }
   
   .main-content {
-    padding: 1.5rem 0;
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
   }
   
   .app-header {
