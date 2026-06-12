@@ -755,7 +755,7 @@ function renderRoleSelection(container) {
               <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
           </div>
-          <h3>Köyde Yerim Var</h3>
+          <h3>Köyde Evim Var</h3>
           <p>Köydeki işlerim (bahçe, hayvancılık vb.) için desteğe ihtiyacım var ve barınma sağlayabilirim.</p>
         </div>
 
@@ -766,7 +766,7 @@ function renderRoleSelection(container) {
               <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z"></path>
             </svg>
           </div>
-          <h3>Köye Gitmek İstiyorum</h3>
+          <h3>Gezgin / İş Arayan</h3>
           <p>Doğayla iç içe olmak, çalışmak ve kırsal yaşama destek vermek istiyorum.</p>
         </div>
       </div>
@@ -800,7 +800,7 @@ function renderRoleSelection(container) {
 function renderVisitorOptions(container) {
   container.innerHTML = `
     <div class="fade-in" style="max-width: 800px; margin: 0 auto;">
-      <h2 class="text-center">Köye Gitmek İstiyorum</h2>
+      <h2 class="text-center">Gezgin / İş Arayan</h2>
       <p class="text-center mb-8">Lütfen yapmak istediğiniz işlemi seçin.</p>
       
       <div class="roles-grid">
@@ -843,7 +843,7 @@ function renderVisitorOptions(container) {
 function renderOwnerOptions(container) {
   container.innerHTML = `
     <div class="fade-in" style="max-width: 800px; margin: 0 auto;">
-      <h2 class="text-center">Köyde Yerim Var</h2>
+      <h2 class="text-center">Köyde Evim Var</h2>
       <p class="text-center mb-8">Lütfen yapmak istediğiniz işlemi seçin.</p>
       
       <div class="roles-grid">
@@ -1271,7 +1271,7 @@ window.applyToListing = async function(id) {
     
     window.showCustomAlert(
       'İlan Gerekli',
-      'Ev sahibi ilanlarına başvurabilmek için önce en az 1 adet aktif "Köye Gitmek İstiyorum (Gezgin)" ilanınız bulunmalıdır.',
+      'Ev sahibi ilanlarına başvurabilmek için önce en az 1 adet aktif "Gezgin / İş Arayan" ilanınız bulunmalıdır.',
       'error'
     );
     return;
@@ -1326,7 +1326,7 @@ window.initiateInvitation = function(visitorListingId) {
     modalBody.innerHTML = `
       <div class="text-center" style="padding: 2rem 0;">
         <h3 style="margin-bottom: 1rem;">Henüz bir ilanınız yok</h3>
-        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">Gezginleri çağırabilmek için önce bir "Köyde Yerim Var" ilanı oluşturmanız gerekmektedir.</p>
+        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">Gezginleri çağırabilmek için önce bir "Köyde Evim Var" ilanı oluşturmanız gerekmektedir.</p>
         <button class="btn btn-primary" onclick="document.getElementById('detail-modal').classList.remove('active'); navigate('/owner-wizard')">İlan Oluştur</button>
       </div>
     `;
@@ -1443,8 +1443,8 @@ function renderDashboard(container) {
             <label class="form-label">İlan Türü</label>
             <select class="form-control" id="filter-type">
               <option value="all" ${window.defaultDashboardFilter === 'all' ? 'selected' : ''}>Tümü</option>
-              <option value="owner" ${window.defaultDashboardFilter === 'owner' ? 'selected' : ''}>Köyde Yerim Var (Ev Sahibi)</option>
-              <option value="visitor" ${window.defaultDashboardFilter === 'visitor' ? 'selected' : ''}>Köye Gitmek İstiyorum (Gezgin)</option>
+              <option value="owner" ${window.defaultDashboardFilter === 'owner' ? 'selected' : ''}>Köyde Evim Var (Ev Sahibi)</option>
+              <option value="visitor" ${window.defaultDashboardFilter === 'visitor' ? 'selected' : ''}>Gezgin / İş Arayan</option>
             </select>
           </div>
 
@@ -2240,8 +2240,8 @@ function renderProfile(container) {
             <label class="form-label" for="profile-role">Rolünüz (Zorunlu)</label>
             <select id="profile-role" class="form-control" required>
               <option value="">Seçiniz...</option>
-              <option value="owner" ${selectedRole === 'owner' ? 'selected' : ''}>Köyde Yerim Var (Ev Sahibi)</option>
-              <option value="visitor" ${selectedRole === 'visitor' ? 'selected' : ''}>Köye Gitmek İstiyorum (Gezgin)</option>
+              <option value="owner" ${selectedRole === 'owner' ? 'selected' : ''}>Köyde Evim Var (Ev Sahibi)</option>
+              <option value="visitor" ${selectedRole === 'visitor' ? 'selected' : ''}>Gezgin / İş Arayan</option>
             </select>
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Rolünüzü değiştirdiğiniz takdirde diğer roldeki mevcut tüm aktif ilanlarınız otomatik olarak pasifleştirilecektir.</small>
           </div>
