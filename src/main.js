@@ -7,7 +7,8 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendEmailVerification
 } from 'firebase/auth'
 import {
   collection,
@@ -162,6 +163,15 @@ onAuthStateChanged(auth, async (user) => {
     window.currentUserEmail = user.email;
     
     if (user.email === 'apieiron@gmail.com') {
+      // Admin verification: must be logged in with Google provider
+      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+      if (!isGoogle) {
+        await signOut(auth);
+        window.showCustomAlert('Erişim Engellendi', 'Yönetici hesabı için sadece Google ile Giriş yöntemine izin verilmektedir.', 'error');
+        navigate('/');
+        return;
+      }
+
       document.getElementById('nav-login').style.display = 'inline-flex';
       document.getElementById('nav-login').textContent = 'Çıkış Yap';
       document.getElementById('profile-dropdown-container').style.display = 'none';
@@ -173,6 +183,19 @@ onAuthStateChanged(auth, async (user) => {
         navigate('/admin');
       }
     } else {
+      // Email Verification check for password login
+      const isGoogleUser = user.providerData.some(p => p.providerId === 'google.com');
+      const isEmailVerified = user.emailVerified || isGoogleUser;
+
+      if (!isEmailVerified) {
+        document.getElementById('nav-login').style.display = 'inline-flex';
+        document.getElementById('nav-login').textContent = 'Çıkış Yap';
+        document.getElementById('profile-dropdown-container').style.display = 'none';
+        document.getElementById('nav-notifications').style.display = 'none';
+        navigate('/verify-email');
+        return;
+      }
+
       // Fetch user profile from Firestore
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -201,7 +224,7 @@ onAuthStateChanged(auth, async (user) => {
         
         setupRealtimeListeners();
         
-        if (window.location.pathname === '/' || window.location.pathname === '/profile') {
+        if (window.location.pathname === '/' || window.location.pathname === '/profile' || window.location.pathname === '/verify-email') {
           navigate('/roles');
         } else {
           // Trigger rerender to make sure layout updates
@@ -234,7 +257,8 @@ const routes = {
   '/applications': renderApplications,
   '/my-listings': renderMyListings,
   '/admin': renderAdminDashboard,
-  '/profile': renderProfile
+  '/profile': renderProfile,
+  '/verify-email': renderVerifyEmail
 }
 
 function navigate(path) {
@@ -246,10 +270,29 @@ window.navigate = navigate;
 function render() {
   const path = window.location.pathname;
   
-  // Profile Completeness Guard
+  // Email Verification Guard
   if (currentUser && currentUser.email !== 'apieiron@gmail.com') {
+    const isGoogleUser = currentUser.providerData.some(p => p.providerId === 'google.com');
+    const isEmailVerified = currentUser.emailVerified || isGoogleUser;
+    
+    if (!isEmailVerified && path !== '/verify-email') {
+      app.innerHTML = '';
+      renderVerifyEmail(app);
+      
+      // Hide all nav elements during verification
+      document.getElementById('nav-login').style.display = 'inline-flex';
+      document.getElementById('nav-login').textContent = 'Çıkış Yap';
+      document.getElementById('profile-dropdown-container').style.display = 'none';
+      document.getElementById('nav-notifications').style.display = 'none';
+      
+      const footer = document.getElementById('app-footer');
+      if (footer) footer.style.display = 'none';
+      return;
+    }
+    
+    // Profile Completeness Guard
     const isProfileComplete = window.userProfile && window.userProfile.phone;
-    if (!isProfileComplete && path !== '/profile') {
+    if (isEmailVerified && !isProfileComplete && path !== '/profile') {
       app.innerHTML = '';
       renderProfile(app);
       
@@ -272,7 +315,10 @@ function render() {
   // Toggle footer visibility
   const footer = document.getElementById('app-footer');
   if (footer) {
-    if (path === '/' || path === '/admin' || (currentUser && !window.userProfile?.phone)) {
+    const isProfileComplete = window.userProfile && window.userProfile.phone;
+    const isEmailVerified = currentUser ? (currentUser.emailVerified || currentUser.providerData.some(p => p.providerId === 'google.com')) : false;
+    
+    if (path === '/' || path === '/admin' || !isEmailVerified || !isProfileComplete) {
       footer.style.display = 'none';
     } else {
       footer.style.display = 'block';
@@ -528,14 +574,20 @@ function renderAuthPage(container) {
     const emailVal = document.getElementById('email').value.trim()
     const passwordVal = document.getElementById('password').value
     
+    if (emailVal === 'apieiron@gmail.com') {
+      window.showCustomAlert('Erişim Engellendi', 'Yönetici hesabı ile e-posta/şifre girişi yapılamaz. Lütfen Google ile Giriş yöntemini kullanın.', 'error');
+      return;
+    }
+
     try {
       await signInWithEmailAndPassword(auth, emailVal, passwordVal)
       window.showCustomAlert('Giriş Başarılı', 'Başarıyla giriş yapıldı.', 'success')
     } catch (loginError) {
       if (loginError.code === 'auth/user-not-found' || loginError.code === 'auth/invalid-credential') {
         try {
-          await createUserWithEmailAndPassword(auth, emailVal, passwordVal)
-          window.showCustomAlert('Kayıt Başarılı', 'Yeni hesabınız oluşturuldu ve giriş yapıldı.', 'success')
+          const userCredential = await createUserWithEmailAndPassword(auth, emailVal, passwordVal)
+          await sendEmailVerification(userCredential.user)
+          window.showCustomAlert('Hesap Oluşturuldu', 'Yeni hesabınız oluşturuldu ve doğrulama e-postası gönderildi. Lütfen e-postanızı onaylayın.', 'info')
         } catch (signUpError) {
           window.showCustomAlert('Hata', 'Kayıt işlemi başarısız: ' + signUpError.message, 'error')
         }
@@ -1833,6 +1885,80 @@ function renderProfile(container) {
       navigate('/roles');
     } catch (err) {
       window.showCustomAlert('Hata', 'Profil kaydedilemedi: ' + err.message, 'error');
+    }
+  });
+}
+
+function renderVerifyEmail(container) {
+  container.innerHTML = `
+    <div class="fade-in" style="max-width: 500px; margin: 0 auto;">
+      <h2 class="text-center mb-4">E-posta Doğrulama</h2>
+      <p class="text-center mb-8" style="color: var(--text-muted);">
+        Lütfen hesabınızı etkinleştirmek için e-posta adresinize gönderilen doğrulama bağlantısına tıklayın.
+      </p>
+
+      <div class="glass-card text-center" style="padding: 2.5rem 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">✉️</div>
+        <h3 class="mb-4" style="font-size: 1.25rem;">Doğrulama Bağlantısı Gönderildi</h3>
+        <p style="font-size: 0.95rem; color: var(--text-main); margin-bottom: 2rem;">
+          <b>${currentUser ? currentUser.email : ''}</b> adresine bir doğrulama e-postası gönderdik. Bağlantıya tıkladıktan sonra aşağıdaki kontrol butonuna basınız.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <button class="btn btn-primary btn-full" id="btn-check-verification">Doğrulamayı Kontrol Et</button>
+          <button class="btn btn-secondary btn-full" id="btn-resend-verification">E-postayı Yeniden Gönder</button>
+          <button class="btn btn-secondary btn-full" id="btn-verify-logout" style="border-color: var(--error); color: var(--error);">Çıkış Yap</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btn-check-verification').addEventListener('click', async () => {
+    if (!auth.currentUser) return;
+    try {
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        window.showCustomAlert('Başarılı', 'E-posta adresiniz doğrulandı. Yönlendiriliyorsunuz...', 'success');
+        
+        // Fetch profile
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          window.userProfile = userDoc.data();
+        } else {
+          window.userProfile = null;
+        }
+
+        const isProfileComplete = window.userProfile && window.userProfile.phone;
+        if (!isProfileComplete) {
+          navigate('/profile');
+        } else {
+          navigate('/roles');
+        }
+      } else {
+        window.showCustomAlert('Doğrulanamadı', 'E-posta adresiniz henüz doğrulanmamış görünüyor. Lütfen gelen e-postadaki linke tıklayıp onaylayın.', 'warning');
+      }
+    } catch (err) {
+      window.showCustomAlert('Hata', 'Kontrol edilirken hata oluştu: ' + err.message, 'error');
+    }
+  });
+
+  document.getElementById('btn-resend-verification').addEventListener('click', async () => {
+    if (!auth.currentUser) return;
+    try {
+      await sendEmailVerification(auth.currentUser);
+      window.showCustomAlert('Gönderildi', 'Doğrulama e-postası tekrar gönderildi. Lütfen kutunuzu kontrol edin.', 'success');
+    } catch (err) {
+      window.showCustomAlert('Hata', 'Gönderilemedi: ' + err.message, 'error');
+    }
+  });
+
+  document.getElementById('btn-verify-logout').addEventListener('click', async () => {
+    try {
+      await signOut(auth);
+      window.showCustomAlert('Çıkış Yapıldı', 'Oturum sonlandırıldı.', 'info');
+      navigate('/');
+    } catch (err) {
+      console.error(err);
     }
   });
 }
