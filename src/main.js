@@ -160,13 +160,12 @@ onAuthStateChanged(auth, async (user) => {
   
   if (user) {
     window.currentUserEmail = user.email;
-    document.getElementById('nav-login').textContent = 'Çıkış Yap';
     
     if (user.email === 'apieiron@gmail.com') {
-      document.getElementById('nav-applications').style.display = 'none';
-      document.getElementById('nav-listings').style.display = 'none';
+      document.getElementById('nav-login').style.display = 'inline-flex';
+      document.getElementById('nav-login').textContent = 'Çıkış Yap';
+      document.getElementById('profile-dropdown-container').style.display = 'none';
       document.getElementById('nav-notifications').style.display = 'none';
-      document.getElementById('nav-profile').style.display = 'none';
       
       setupRealtimeListeners();
       
@@ -190,15 +189,14 @@ onAuthStateChanged(auth, async (user) => {
       const isProfileComplete = window.userProfile && window.userProfile.phone;
       
       if (!isProfileComplete) {
-        document.getElementById('nav-profile').style.display = 'none';
-        document.getElementById('nav-listings').style.display = 'none';
-        document.getElementById('nav-applications').style.display = 'none';
+        document.getElementById('nav-login').style.display = 'inline-flex';
+        document.getElementById('nav-login').textContent = 'Çıkış Yap';
+        document.getElementById('profile-dropdown-container').style.display = 'none';
         document.getElementById('nav-notifications').style.display = 'none';
         navigate('/profile');
       } else {
-        document.getElementById('nav-profile').style.display = 'inline-flex';
-        document.getElementById('nav-listings').style.display = 'inline-flex';
-        document.getElementById('nav-applications').style.display = 'inline-flex';
+        document.getElementById('nav-login').style.display = 'none';
+        document.getElementById('profile-dropdown-container').style.display = 'inline-block';
         document.getElementById('nav-notifications').style.display = 'inline-flex';
         
         setupRealtimeListeners();
@@ -214,11 +212,10 @@ onAuthStateChanged(auth, async (user) => {
   } else {
     window.currentUserEmail = null;
     window.userProfile = null;
+    document.getElementById('nav-login').style.display = 'inline-flex';
     document.getElementById('nav-login').textContent = 'Giriş Yap';
-    document.getElementById('nav-applications').style.display = 'none';
-    document.getElementById('nav-listings').style.display = 'none';
+    document.getElementById('profile-dropdown-container').style.display = 'none';
     document.getElementById('nav-notifications').style.display = 'none';
-    document.getElementById('nav-profile').style.display = 'none';
     
     if (window.location.pathname !== '/') {
       navigate('/');
@@ -257,9 +254,9 @@ function render() {
       renderProfile(app);
       
       // Hide all nav elements during setup
-      document.getElementById('nav-profile').style.display = 'none';
-      document.getElementById('nav-listings').style.display = 'none';
-      document.getElementById('nav-applications').style.display = 'none';
+      document.getElementById('nav-login').style.display = 'inline-flex';
+      document.getElementById('nav-login').textContent = 'Çıkış Yap';
+      document.getElementById('profile-dropdown-container').style.display = 'none';
       document.getElementById('nav-notifications').style.display = 'none';
       
       const footer = document.getElementById('app-footer');
@@ -422,37 +419,65 @@ document.getElementById('nav-home').addEventListener('click', (e) => {
   navigate('/')
 })
 
+// Setup profile dropdown toggling and click outside behavior
+const avatarBtn = document.getElementById('profile-avatar-btn');
+const dropdownMenu = document.getElementById('profile-dropdown-menu');
+if (avatarBtn && dropdownMenu) {
+  avatarBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropdownMenu.classList.toggle('active');
+  });
+  
+  document.addEventListener('click', () => {
+    dropdownMenu.classList.remove('active');
+  });
+}
+
+// Bind dropdown menu click actions
+document.getElementById('dropdown-profile').addEventListener('click', (e) => {
+  e.preventDefault();
+  navigate('/profile');
+});
+
+document.getElementById('dropdown-listings').addEventListener('click', (e) => {
+  e.preventDefault();
+  navigate('/my-listings');
+});
+
+document.getElementById('dropdown-applications').addEventListener('click', (e) => {
+  e.preventDefault();
+  navigate('/applications');
+});
+
+// Logout handlers for both standard and dropdown
+async function handleLogout() {
+  try {
+    await signOut(auth);
+    window.showCustomAlert('Çıkış Yapıldı', 'Güvenli bir şekilde çıkış yaptınız.', 'info');
+  } catch (err) {
+    console.error("Logout error: ", err);
+  }
+  navigate('/');
+}
+
+document.getElementById('dropdown-logout').addEventListener('click', (e) => {
+  e.preventDefault();
+  handleLogout();
+});
+
 document.getElementById('nav-login').addEventListener('click', async (e) => {
   e.preventDefault()
   if (document.getElementById('nav-login').textContent === 'Çıkış Yap') {
-    try {
-      await signOut(auth);
-      window.showCustomAlert('Çıkış Yapıldı', 'Güvenli bir şekilde çıkış yaptınız.', 'info');
-    } catch (err) {
-      console.error("Logout error: ", err);
-    }
+    handleLogout();
+  } else {
+    navigate('/')
   }
-  navigate('/')
 })
 
 document.getElementById('nav-notifications').addEventListener('click', (e) => {
   e.preventDefault()
   window.openNotificationModal()
-})
-
-document.getElementById('nav-profile').addEventListener('click', (e) => {
-  e.preventDefault()
-  navigate('/profile')
-})
-
-document.getElementById('nav-applications').addEventListener('click', (e) => {
-  e.preventDefault()
-  navigate('/applications')
-})
-
-document.getElementById('nav-listings').addEventListener('click', (e) => {
-  e.preventDefault()
-  navigate('/my-listings')
 })
 
 // === PAGES ===
@@ -757,8 +782,10 @@ function renderOwnerWizard(container) {
       return;
     }
 
-    const city = document.getElementById('owner-city').value;
-    const district = document.getElementById('owner-district').value;
+    const citySelect = document.getElementById('owner-city');
+    const districtSelect = document.getElementById('owner-district');
+    const city = citySelect.options[citySelect.selectedIndex].text;
+    const district = districtSelect.options[districtSelect.selectedIndex].text;
     const village = e.target.querySelector('input[placeholder="Örn: Sultaniçe Köyü"]').value;
     const desc = e.target.querySelector('textarea').value;
     
@@ -915,8 +942,10 @@ function renderVisitorWizard(container) {
     const allTurkey = document.getElementById('all-turkey').checked;
     let location = 'Tüm Türkiye';
     if (!allTurkey) {
-      const city = document.getElementById('visitor-city').value;
-      const district = document.getElementById('visitor-district').value;
+      const citySelect = document.getElementById('visitor-city');
+      const districtSelect = document.getElementById('visitor-district');
+      const city = citySelect.options[citySelect.selectedIndex].text;
+      const district = districtSelect.options[districtSelect.selectedIndex].text;
       location = `${city} / ${district}`;
     }
 
