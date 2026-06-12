@@ -219,15 +219,73 @@ function render() {
   app.innerHTML = ''
   renderer(app)
 
-  // Feedback FAB visibility toggle
-  const fab = document.getElementById('feedback-fab');
-  if (fab) {
-    if (path === '/admin') {
-      fab.style.display = 'none';
+  // Toggle footer visibility
+  const footer = document.getElementById('app-footer');
+  if (footer) {
+    if (path === '/' || path === '/admin') {
+      footer.style.display = 'none';
     } else {
-      fab.style.display = 'flex';
+      footer.style.display = 'block';
     }
   }
+}
+
+// Feedback Modal and Submission Logic
+window.openFeedbackModal = function() {
+  const modalHtml = `
+    <div class="modal-overlay active" id="feedback-modal">
+      <div class="modal-content" style="max-width: 450px; padding: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h3 style="margin: 0; font-size: 1.25rem;">Görüş ve Öneri Bildir</h3>
+          <button class="modal-close" style="position: static;" onclick="document.getElementById('feedback-modal').remove()">&times;</button>
+        </div>
+        
+        <form id="feedback-form">
+          <div class="form-group">
+            <label class="form-label" for="feedback-category">Kategori</label>
+            <select class="form-control" id="feedback-category" required>
+              <option value="">Seçiniz...</option>
+              <option value="Genel Görüş">Genel Görüş</option>
+              <option value="Ev Sahibi Sistemi">Ev Sahibi Sistemi</option>
+              <option value="Gezgin Sistemi">Gezgin Sistemi</option>
+              <option value="Hata Bildirimi">Hata Bildirimi</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="feedback-desc">Görüş / Açıklama</label>
+            <textarea class="form-control" id="feedback-desc" rows="5" placeholder="Görüş, öneri veya karşılaştığınız hatayı detaylıca yazınız..." required></textarea>
+          </div>
+          
+          <button type="submit" class="btn btn-primary btn-full mt-4">Gönder</button>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  // Add submit listener
+  document.getElementById('feedback-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const category = document.getElementById('feedback-category').value;
+    const description = document.getElementById('feedback-desc').value.trim();
+
+    try {
+      await addDoc(collection(db, 'feedbacks'), {
+        userEmail: currentUser ? currentUser.email : 'Misafir',
+        userId: currentUser ? currentUser.uid : 'guest',
+        category: category,
+        description: description,
+        createdAt: new Date().getTime(),
+        date: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})
+      });
+
+      document.getElementById('feedback-modal').remove();
+      window.showCustomAlert('Geri Bildirim Alındı', 'Görüş ve önerileriniz için teşekkür ederiz!', 'success');
+    } catch (error) {
+      window.showCustomAlert('Hata', 'Geri bildirim gönderilemedi: ' + error.message, 'error');
+    }
+  });
 }
 
 // Custom Alert System

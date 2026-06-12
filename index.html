@@ -36,13 +36,18 @@
       <!-- Content will be dynamically loaded here by main.js -->
     </main>
 
-    <!-- Feedback Floating Action Button -->
-    <button id="feedback-fab" class="feedback-fab" onclick="window.openFeedbackModal()">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-      <span>Görüş Bildir</span>
-    </button>
+    <!-- Footer containing Feedback Button -->
+    <footer class="app-footer" id="app-footer" style="display: none;">
+      <div class="container footer-content" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; padding: 1.5rem 0;">
+        <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">© 2026 Köye Gel - Tersine Göç ve Dayanışma Ağı</p>
+        <button class="btn btn-secondary" id="btn-feedback-footer" onclick="window.openFeedbackModal()" style="font-size: 0.85rem; padding: 0.5rem 1rem;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          Görüş / Öneri Bildir
+        </button>
+      </div>
+    </footer>
 
     <script type="module" src="/src/main.js"></script>
   </body>
