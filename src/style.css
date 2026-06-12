@@ -261,8 +261,8 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
 /* Roles Layout */
 .roles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
   margin-top: 2rem;
 }
 
@@ -686,4 +686,64 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
   background-color: var(--error);
   color: white;
 }
+
+/* Responsive Styles for Mobile Devices */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 1rem;
+  }
+  
+  .main-content {
+    padding: 1.5rem 0;
+  }
+  
+  .app-header {
+    padding: 0.75rem 0;
+  }
+  
+  .app-header .container {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  
+  .logo {
+    font-size: 1.3rem;
+  }
+  
+  .app-header nav {
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    width: 100%;
+    gap: 0.5rem !important;
+  }
+
+  /* Override hardcoded margins on mobile */
+  .app-header nav #nav-notifications {
+    margin-right: 0.5rem !important;
+  }
+
+  .app-header nav .btn {
+    margin-right: 0 !important;
+    padding: 0.5rem 0.85rem !important;
+    font-size: 0.825rem !important;
+  }
+  
+  .card {
+    padding: 1.5rem;
+  }
+  
+  .glass-card {
+    padding: 1.5rem;
+  }
+  
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.25rem; }
+  
+  .roles-grid {
+    gap: 1rem;
+  }
+}
+
 
