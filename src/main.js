@@ -1099,22 +1099,30 @@ window.confirmInvitation = async function(visitorListingId, ownerListingId) {
 function renderDashboard(container) {
   container.innerHTML = `
     <div class="fade-in">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2>İlan Panosu</h2>
-        <button class="btn btn-secondary" id="toggle-view" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.25rem;">
-            <line x1="8" y1="6" x2="21" y2="6"></line>
-            <line x1="8" y1="12" x2="21" y2="12"></line>
-            <line x1="8" y1="18" x2="21" y2="18"></line>
-            <line x1="3" y1="6" x2="3.01" y2="6"></line>
-            <line x1="3" y1="12" x2="3.01" y2="12"></line>
-            <line x1="3" y1="18" x2="3.01" y2="18"></line>
-          </svg>
-          Liste / Tablo Görünümü
-        </button>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+        <h2 style="margin: 0;">İlan Panosu</h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center; width: 100%; justify-content: space-between; margin-top: 0.5rem;" class="dashboard-controls-mobile">
+          <button class="btn btn-secondary" id="btn-toggle-filters" style="padding: 0.5rem 1rem; font-size: 0.875rem; flex: 1; justify-content: center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span id="filter-btn-text">Filtreleri Göster</span>
+          </button>
+          <button class="btn btn-secondary" id="toggle-view" style="padding: 0.5rem 1rem; font-size: 0.875rem; flex: 1; justify-content: center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.25rem;">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+            Liste Görünümü
+          </button>
+        </div>
       </div>
 
-      <div class="glass-card mb-8" style="padding: 1.5rem;">
+      <div class="glass-card mb-8 filter-panel" id="filter-panel" style="padding: 1.5rem;">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
           
           <div class="form-group" style="margin-bottom: 0;">
@@ -1128,7 +1136,7 @@ function renderDashboard(container) {
 
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">Süre/Dönem</label>
-            <select class="form-control">
+            <select class="form-control" id="filter-duration">
               <option value="all">Tümü</option>
               <option value="summer">Yaz Sezonluk</option>
               <option value="winter">Kış Sezonluk</option>
@@ -1139,7 +1147,7 @@ function renderDashboard(container) {
 
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">Beceri / İhtiyaç</label>
-            <select class="form-control">
+            <select class="form-control" id="filter-skills">
               <option value="all">Tümü</option>
               <option value="garden">Bahçe & Tarla</option>
               <option value="animals">Hayvancılık</option>
@@ -1151,7 +1159,7 @@ function renderDashboard(container) {
 
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">Sıralama</label>
-            <select class="form-control">
+            <select class="form-control" id="filter-sort">
               <option value="newest">En Yeni İlanlar (Önce)</option>
               <option value="oldest">En Eski İlanlar</option>
             </select>
@@ -1159,8 +1167,9 @@ function renderDashboard(container) {
 
         </div>
         
-        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
-          <button class="btn btn-primary" onclick="window.showCustomAlert('Filtrelendi', 'İlan panosu seçtiğiniz kriterlere göre güncellendi.', 'success')">Filtrele</button>
+        <div style="display: flex; justify-content: flex-end; margin-top: 1.25rem; gap: 0.5rem;">
+          <button class="btn btn-secondary" id="btn-reset-filters" style="font-size: 0.85rem; padding: 0.5rem 1rem;">Temizle</button>
+          <button class="btn btn-primary" id="btn-apply-filters" style="font-size: 0.85rem; padding: 0.5rem 1rem;">Filtrele</button>
         </div>
       </div>
 
@@ -1174,7 +1183,19 @@ function renderDashboard(container) {
         <div id="modal-body"></div>
       </div>
     </div>
-  `
+  `;
+
+  // Toggle Filters on Mobile
+  const filterPanel = container.querySelector('#filter-panel');
+  const btnToggleFilters = container.querySelector('#btn-toggle-filters');
+  const filterBtnText = container.querySelector('#filter-btn-text');
+
+  if (btnToggleFilters && filterPanel) {
+    btnToggleFilters.addEventListener('click', () => {
+      const isExpanded = filterPanel.classList.toggle('expanded');
+      filterBtnText.textContent = isExpanded ? 'Filtreleri Gizle' : 'Filtreleri Göster';
+    });
+  }
 
   window.openListingModal = function(id) {
     const item = dbListings.find(l => l.id === id);
@@ -1221,11 +1242,47 @@ function renderDashboard(container) {
 
     window.defaultDashboardFilter = 'all';
 
-    const activeListings = dbListings.filter(l => {
+    const durationSelect = container.querySelector('#filter-duration');
+    const durationFilter = durationSelect ? durationSelect.value : 'all';
+
+    const skillsSelect = container.querySelector('#filter-skills');
+    const skillsFilter = skillsSelect ? skillsSelect.value : 'all';
+
+    const sortSelect = container.querySelector('#filter-sort');
+    const sortFilter = sortSelect ? sortSelect.value : 'newest';
+
+    let activeListings = dbListings.filter(l => {
       if (!l.isActive) return false;
       if (typeFilter !== 'all' && l.type !== typeFilter) return false;
+      
+      // Duration Filter
+      if (durationFilter !== 'all') {
+        const text = (l.duration || '').toLowerCase();
+        if (durationFilter === 'summer' && !text.includes('yaz')) return false;
+        if (durationFilter === 'winter' && !text.includes('kış')) return false;
+        if (durationFilter === 'short' && !text.includes('kısa')) return false;
+        if (durationFilter === 'long' && !(text.includes('uzun') || text.includes('kalıcı'))) return false;
+      }
+
+      // Skills Filter
+      if (skillsFilter !== 'all') {
+        const skillsText = (l.skills || []).join(' ').toLowerCase();
+        if (skillsFilter === 'garden' && !(skillsText.includes('bahçe') || skillsText.includes('tarla'))) return false;
+        if (skillsFilter === 'animals' && !(skillsText.includes('hayvan') || skillsText.includes('sağım'))) return false;
+        if (skillsFilter === 'care' && !(skillsText.includes('yaşlı') || skillsText.includes('hasta') || skillsText.includes('bakım'))) return false;
+        if (skillsFilter === 'house' && !(skillsText.includes('ev') || skillsText.includes('yemek'))) return false;
+        if (skillsFilter === 'repair' && !(skillsText.includes('tamirat') || skillsText.includes('inşaat') || skillsText.includes('tadilat'))) return false;
+      }
+
       return true;
     });
+
+    // Sorting
+    if (sortFilter === 'newest') {
+      activeListings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } else {
+      activeListings.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    }
 
     if (activeListings.length === 0) {
       listContainer.innerHTML = `
@@ -1299,9 +1356,40 @@ function renderDashboard(container) {
     drawListings();
   });
 
-  const filterSelect = container.querySelector('#filter-type');
-  if (filterSelect) {
-    filterSelect.addEventListener('change', drawListings);
+  // Event Listeners for Filters
+  const btnApply = container.querySelector('#btn-apply-filters');
+  if (btnApply) {
+    btnApply.addEventListener('click', () => {
+      drawListings();
+      // On mobile, collapse filters after applying
+      if (window.innerWidth <= 768) {
+        filterPanel.classList.remove('expanded');
+        filterBtnText.textContent = 'Filtreleri Göster';
+      }
+      window.showCustomAlert('Filtrelendi', 'İlan panosu kriterlerinize göre güncellendi.', 'success');
+    });
+  }
+
+  const btnReset = container.querySelector('#btn-reset-filters');
+  if (btnReset) {
+    btnReset.addEventListener('click', () => {
+      container.querySelector('#filter-type').value = 'all';
+      container.querySelector('#filter-duration').value = 'all';
+      container.querySelector('#filter-skills').value = 'all';
+      container.querySelector('#filter-sort').value = 'newest';
+      drawListings();
+      if (window.innerWidth <= 768) {
+        filterPanel.classList.remove('expanded');
+        filterBtnText.textContent = 'Filtreleri Göster';
+      }
+      window.showCustomAlert('Sıfırlandı', 'Tüm filtreler temizlendi.', 'info');
+    });
+  }
+
+  // Type change listener directly
+  const filterTypeSelect = container.querySelector('#filter-type');
+  if (filterTypeSelect) {
+    filterTypeSelect.addEventListener('change', drawListings);
   }
 }
 
