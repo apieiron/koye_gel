@@ -262,8 +262,8 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
 /* Roles Layout */
 .roles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
   margin-top: 2rem;
 }
 
@@ -320,20 +320,24 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+  padding: 1.5rem !important;
+  max-width: 320px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .role-icon {
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   background-color: rgba(47, 133, 90, 0.1);
   color: var(--primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
+  font-size: 1.75rem;
+  margin-bottom: 0.25rem;
   transition: var(--transition);
 }
 
@@ -850,6 +854,43 @@ p { color: var(--text-muted); margin-bottom: 1rem; }
   border: 0;
   border-top: 1px solid var(--border-color);
   margin: 0.4rem 0;
+}
+
+/* Contact actions buttons styles */
+.contact-actions {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.contact-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: white;
+  transition: var(--transition);
+  text-decoration: none;
+}
+
+.phone-btn {
+  background-color: #2b6cb0;
+}
+
+.phone-btn:hover {
+  background-color: #2b5c8f;
+  transform: scale(1.1);
+}
+
+.whatsapp-btn {
+  background-color: #25d366;
+}
+
+.whatsapp-btn:hover {
+  background-color: #128c7e;
+  transform: scale(1.1);
 }
 
 

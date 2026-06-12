@@ -197,10 +197,13 @@ onAuthStateChanged(auth, async (user) => {
       }
 
       // Fetch user profile from Firestore
+      // Fetch user profile from Firestore
+      let userDocExists = false;
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           window.userProfile = userDoc.data();
+          userDocExists = true;
         } else {
           window.userProfile = null;
         }
@@ -209,9 +212,35 @@ onAuthStateChanged(auth, async (user) => {
         window.userProfile = null;
       }
 
-      const isProfileComplete = window.userProfile && window.userProfile.phone;
+      // Check KVKK status for new users
+      if (!userDocExists) {
+        const kvkkChecked = document.getElementById('kvkk') && document.getElementById('kvkk').checked;
+        if (!kvkkChecked) {
+          await signOut(auth);
+          window.showCustomAlert('KVKK Onayı Gerekli', 'Yeni hesap oluşturmak için lütfen KVKK Aydınlatma Metni\'ni okuyup onaylayınız.', 'error');
+          navigate('/');
+          return;
+        } else {
+          // Initialize user profile doc with KVKK status
+          try {
+            await setDoc(doc(db, 'users', user.uid), { kvkkAccepted: true, email: user.email }, { merge: true });
+            window.userProfile = { kvkkAccepted: true, email: user.email };
+          } catch (err) {
+            console.error("Error creating user profile document:", err);
+          }
+        }
+      }
+
+      const hasRole = window.userProfile && window.userProfile.role;
+      const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
       
-      if (!isProfileComplete) {
+      if (!hasRole) {
+        document.getElementById('nav-login').style.display = 'inline-flex';
+        document.getElementById('nav-login').textContent = 'Çıkış Yap';
+        document.getElementById('profile-dropdown-container').style.display = 'none';
+        document.getElementById('nav-notifications').style.display = 'none';
+        navigate('/roles');
+      } else if (!isProfileComplete) {
         document.getElementById('nav-login').style.display = 'inline-flex';
         document.getElementById('nav-login').textContent = 'Çıkış Yap';
         document.getElementById('profile-dropdown-container').style.display = 'none';
@@ -224,8 +253,8 @@ onAuthStateChanged(auth, async (user) => {
         
         setupRealtimeListeners();
         
-        if (window.location.pathname === '/' || window.location.pathname === '/profile' || window.location.pathname === '/verify-email') {
-          navigate('/roles');
+        if (window.location.pathname === '/' || window.location.pathname === '/profile' || window.location.pathname === '/verify-email' || window.location.pathname === '/roles') {
+          navigate('/dashboard');
         } else {
           // Trigger rerender to make sure layout updates
           triggerRerender();
@@ -270,6 +299,36 @@ window.navigate = navigate;
 function render() {
   const path = window.location.pathname;
   
+  // Sync nav header visibility dynamically
+  if (currentUser) {
+    if (currentUser.email === 'apieiron@gmail.com') {
+      document.getElementById('nav-login').style.display = 'inline-flex';
+      document.getElementById('nav-login').textContent = 'Çıkış Yap';
+      document.getElementById('profile-dropdown-container').style.display = 'none';
+      document.getElementById('nav-notifications').style.display = 'none';
+    } else {
+      const isGoogleUser = currentUser.providerData.some(p => p.providerId === 'google.com');
+      const isEmailVerified = currentUser.emailVerified || isGoogleUser;
+      const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
+
+      if (!isEmailVerified || !isProfileComplete) {
+        document.getElementById('nav-login').style.display = 'inline-flex';
+        document.getElementById('nav-login').textContent = 'Çıkış Yap';
+        document.getElementById('profile-dropdown-container').style.display = 'none';
+        document.getElementById('nav-notifications').style.display = 'none';
+      } else {
+        document.getElementById('nav-login').style.display = 'none';
+        document.getElementById('profile-dropdown-container').style.display = 'inline-block';
+        document.getElementById('nav-notifications').style.display = 'inline-flex';
+      }
+    }
+  } else {
+    document.getElementById('nav-login').style.display = 'inline-flex';
+    document.getElementById('nav-login').textContent = 'Giriş Yap';
+    document.getElementById('profile-dropdown-container').style.display = 'none';
+    document.getElementById('nav-notifications').style.display = 'none';
+  }
+
   // Email Verification Guard
   if (currentUser && currentUser.email !== 'apieiron@gmail.com') {
     const isGoogleUser = currentUser.providerData.some(p => p.providerId === 'google.com');
@@ -279,32 +338,35 @@ function render() {
       app.innerHTML = '';
       renderVerifyEmail(app);
       
-      // Hide all nav elements during verification
-      document.getElementById('nav-login').style.display = 'inline-flex';
-      document.getElementById('nav-login').textContent = 'Çıkış Yap';
-      document.getElementById('profile-dropdown-container').style.display = 'none';
-      document.getElementById('nav-notifications').style.display = 'none';
-      
       const footer = document.getElementById('app-footer');
       if (footer) footer.style.display = 'none';
       return;
     }
     
-    // Profile Completeness Guard
-    const isProfileComplete = window.userProfile && window.userProfile.phone;
-    if (isEmailVerified && !isProfileComplete && path !== '/profile') {
-      app.innerHTML = '';
-      renderProfile(app);
-      
-      // Hide all nav elements during setup
-      document.getElementById('nav-login').style.display = 'inline-flex';
-      document.getElementById('nav-login').textContent = 'Çıkış Yap';
-      document.getElementById('profile-dropdown-container').style.display = 'none';
-      document.getElementById('nav-notifications').style.display = 'none';
-      
-      const footer = document.getElementById('app-footer');
-      if (footer) footer.style.display = 'none';
-      return;
+    if (isEmailVerified) {
+      // 1. Role Selection Guard
+      const hasRole = window.userProfile && window.userProfile.role;
+      if (!hasRole) {
+        if (path !== '/roles') {
+          app.innerHTML = '';
+          renderRoleSelection(app);
+          
+          const footer = document.getElementById('app-footer');
+          if (footer) footer.style.display = 'none';
+          return;
+        }
+      } else {
+        // 2. Profile Completeness Guard (requires both phone and role)
+        const isProfileComplete = window.userProfile && window.userProfile.phone;
+        if (!isProfileComplete && path !== '/profile') {
+          app.innerHTML = '';
+          renderProfile(app);
+          
+          const footer = document.getElementById('app-footer');
+          if (footer) footer.style.display = 'none';
+          return;
+        }
+      }
     }
   }
 
@@ -315,7 +377,7 @@ function render() {
   // Toggle footer visibility
   const footer = document.getElementById('app-footer');
   if (footer) {
-    const isProfileComplete = window.userProfile && window.userProfile.phone;
+    const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
     const isEmailVerified = currentUser ? (currentUser.emailVerified || currentUser.providerData.some(p => p.providerId === 'google.com')) : false;
     
     if (path === '/' || path === '/admin' || !isEmailVerified || !isProfileComplete) {
@@ -472,11 +534,17 @@ document.getElementById('nav-home').addEventListener('click', (e) => {
     if (!isEmailVerified) {
       navigate('/verify-email')
     } else {
-      const isProfileComplete = window.userProfile && window.userProfile.phone;
-      if (!isProfileComplete) {
-        navigate('/profile')
-      } else {
+      const hasRole = window.userProfile && window.userProfile.role;
+      if (!hasRole) {
         navigate('/roles')
+      } else {
+        const isProfileComplete = window.userProfile && window.userProfile.phone;
+        if (!isProfileComplete) {
+          navigate('/profile')
+        } else {
+          window.customDashboardFilterApplied = false;
+          navigate('/dashboard')
+        }
       }
     }
   }
@@ -705,8 +773,28 @@ function renderRoleSelection(container) {
     </div>
   `
 
-  document.getElementById('role-owner').addEventListener('click', () => navigate('/owner-options'))
-  document.getElementById('role-visitor').addEventListener('click', () => navigate('/visitor-options'))
+  const saveRoleAndNavigate = async (roleVal) => {
+    if (!currentUser) return;
+    try {
+      const updatedProfile = {
+        role: roleVal,
+        email: currentUser.email,
+        updatedAt: new Date().getTime()
+      };
+      await setDoc(doc(db, 'users', currentUser.uid), updatedProfile, { merge: true });
+      if (!window.userProfile) window.userProfile = {};
+      window.userProfile.role = roleVal;
+      window.userProfile.email = currentUser.email;
+      
+      window.showCustomAlert('Rol Kaydedildi', 'Rolünüz kaydedildi, lütfen profil bilgilerinizi tamamlayınız.', 'success');
+      navigate('/profile');
+    } catch (err) {
+      window.showCustomAlert('Hata', 'Rol kaydedilemedi: ' + err.message, 'error');
+    }
+  };
+
+  document.getElementById('role-owner').addEventListener('click', () => saveRoleAndNavigate('owner'));
+  document.getElementById('role-visitor').addEventListener('click', () => saveRoleAndNavigate('visitor'));
 }
 
 function renderVisitorOptions(container) {
@@ -1175,6 +1263,20 @@ window.applyToListing = async function(id) {
   const listingItem = dbListings.find(l => l.id === id);
   if (!listingItem) return;
 
+  // Verify applicant has at least 1 active traveler listing
+  const myVisitorListings = dbListings.filter(l => l.ownerId === currentUser.uid && l.type === 'visitor' && l.isActive);
+  if (myVisitorListings.length === 0) {
+    const detailModal = document.getElementById('detail-modal');
+    if (detailModal) detailModal.classList.remove('active');
+    
+    window.showCustomAlert(
+      'İlan Gerekli',
+      'Ev sahibi ilanlarına başvurabilmek için önce en az 1 adet aktif "Köye Gitmek İstiyorum (Gezgin)" ilanınız bulunmalıdır.',
+      'error'
+    );
+    return;
+  }
+
   try {
     await addDoc(collection(db, 'applications'), {
       applicantId: currentUser.uid,
@@ -1295,7 +1397,20 @@ window.confirmInvitation = async function(visitorListingId, ownerListingId) {
   }
 }
 
+window.defaultDashboardFilter = window.defaultDashboardFilter || 'all';
+
 function renderDashboard(container) {
+  // Preset default type filter based on user profile role if custom has not been applied yet
+  if (!window.customDashboardFilterApplied) {
+    if (window.userProfile && window.userProfile.role === 'owner') {
+      window.defaultDashboardFilter = 'visitor';
+    } else if (window.userProfile && window.userProfile.role === 'visitor') {
+      window.defaultDashboardFilter = 'owner';
+    } else {
+      window.defaultDashboardFilter = 'all';
+    }
+  }
+
   container.innerHTML = `
     <div class="fade-in">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -1559,6 +1674,7 @@ function renderDashboard(container) {
   const btnApply = container.querySelector('#btn-apply-filters');
   if (btnApply) {
     btnApply.addEventListener('click', () => {
+      window.customDashboardFilterApplied = true;
       drawListings();
       // On mobile, collapse filters after applying
       if (window.innerWidth <= 768) {
@@ -1572,7 +1688,16 @@ function renderDashboard(container) {
   const btnReset = container.querySelector('#btn-reset-filters');
   if (btnReset) {
     btnReset.addEventListener('click', () => {
-      container.querySelector('#filter-type').value = 'all';
+      window.customDashboardFilterApplied = false;
+      
+      let defaultVal = 'all';
+      if (window.userProfile && window.userProfile.role === 'owner') {
+        defaultVal = 'visitor';
+      } else if (window.userProfile && window.userProfile.role === 'visitor') {
+        defaultVal = 'owner';
+      }
+
+      container.querySelector('#filter-type').value = defaultVal;
       container.querySelector('#filter-duration').value = 'all';
       container.querySelector('#filter-skills').value = 'all';
       container.querySelector('#filter-sort').value = 'newest';
@@ -1588,62 +1713,269 @@ function renderDashboard(container) {
   // Type change listener directly
   const filterTypeSelect = container.querySelector('#filter-type');
   if (filterTypeSelect) {
-    filterTypeSelect.addEventListener('change', drawListings);
+    filterTypeSelect.addEventListener('change', () => {
+      window.customDashboardFilterApplied = true;
+      drawListings();
+    });
   }
 }
 
-function renderApplications(container) {
-  if (!currentUser) return;
-  const myApps = dbApplications.filter(app => app.applicantId === currentUser.uid);
+window.acceptApplication = async function(appId, notifyUserId) {
+  try {
+    await updateDoc(doc(db, 'applications', appId), { status: 'kabul' });
+    window.showCustomAlert('Başvuru Kabul Edildi', 'Başvuruyu onayladınız. Karşı taraf bilgilendirilecektir.', 'success');
+    window.sendNotification(
+      notifyUserId,
+      'Başvurunuz Kabul Edildi!',
+      'Yaptığınız başvuru onaylandı. Detaylar ve iletişim için başvurularım sayfasını inceleyebilirsiniz.'
+    );
+  } catch (err) {
+    window.showCustomAlert('Hata', 'Onaylama işlemi başarısız: ' + err.message, 'error');
+  }
+};
 
-  if (myApps.length === 0) {
-    container.innerHTML = `
-      <div class="fade-in text-center" style="padding: 4rem 0;">
-        <h2>Henüz bir başvurunuz yok</h2>
-        <p class="mb-4">İlan panosundan size uygun ilanları inceleyebilirsiniz.</p>
-        <button class="btn btn-primary mt-4" onclick="navigate('/dashboard')">İlan Panosuna Git</button>
-      </div>
-    `;
-    return;
+window.rejectApplication = async function(appId, notifyUserId) {
+  try {
+    await updateDoc(doc(db, 'applications', appId), { status: 'reddedildi' });
+    window.showCustomAlert('Başvuru Reddedildi', 'Başvuruyu reddettiniz.', 'info');
+    window.sendNotification(
+      notifyUserId,
+      'Başvuru Durumu',
+      'Yaptığınız başvuru bu aşamada onaylanamadı.'
+    );
+  } catch (err) {
+    window.showCustomAlert('Hata', 'Reddetme işlemi başarısız: ' + err.message, 'error');
+  }
+};
+
+async function renderApplications(container) {
+  if (!currentUser) return;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 4rem 0;">
+      <svg class="spinner" width="40" height="40" viewBox="0 0 50 50" style="animation: spin 1s linear infinite; margin-bottom: 1rem; color: var(--primary); display: inline-block;">
+        <circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="5" stroke-dasharray="125" stroke-dashoffset="0"></circle>
+      </svg>
+      <p style="color: var(--text-muted); font-size: 0.95rem;">Başvurular yükleniyor...</p>
+    </div>
+  `;
+
+  const isOwner = window.userProfile && window.userProfile.role === 'owner';
+  
+  // Filter received and sent apps
+  let received = [];
+  let sent = [];
+  if (isOwner) {
+    received = dbApplications.filter(app => app.listingOwnerId === currentUser.uid && !app.invitationFromListingId);
+    sent = dbApplications.filter(app => app.listingOwnerId === currentUser.uid && app.invitationFromListingId);
+  } else {
+    received = dbApplications.filter(app => app.applicantId === currentUser.uid && app.invitationFromListingId);
+    sent = dbApplications.filter(app => app.applicantId === currentUser.uid && !app.invitationFromListingId);
   }
 
-  const getStatusBadge = (status, isActive) => {
-    if (!isActive) return '<span class="badge badge-error">🔴 İlan Pasif</span>';
+  // Load profile data and active listings for received records
+  const receivedData = [];
+  for (const item of received) {
+    let profile = null;
+    let listings = [];
+    let targetListing = null;
+    let invitationListing = null;
+    try {
+      const profileId = isOwner ? item.applicantId : item.listingOwnerId;
+      const profileDoc = await getDoc(doc(db, 'users', profileId));
+      if (profileDoc.exists()) {
+        profile = profileDoc.data();
+      }
+
+      const listingsQuery = query(
+        collection(db, 'listings'),
+        where('ownerId', '==', profileId),
+        where('isActive', '==', true)
+      );
+      const listingsSnap = await getDocs(listingsQuery);
+      listings = listingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      if (item.listingId) {
+        const listingDoc = await getDoc(doc(db, 'listings', item.listingId));
+        if (listingDoc.exists()) {
+          targetListing = { id: listingDoc.id, ...listingDoc.data() };
+        }
+      }
+
+      if (item.invitationFromListingId) {
+        const listingDoc = await getDoc(doc(db, 'listings', item.invitationFromListingId));
+        if (listingDoc.exists()) {
+          invitationListing = { id: listingDoc.id, ...listingDoc.data() };
+        }
+      }
+    } catch (err) {
+      console.error("Error loading application detail:", err);
+    }
+    receivedData.push({ ...item, profile, listings, targetListing, invitationListing });
+  }
+
+  const formatWhatsAppNumber = (phoneStr) => {
+    if (!phoneStr) return '';
+    let cleaned = phoneStr.replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+      cleaned = '90' + cleaned.substring(1);
+    }
+    if (cleaned.length === 10 && cleaned.startsWith('5')) {
+      cleaned = '90' + cleaned;
+    }
+    return cleaned;
+  };
+
+  const getStatusBadge = (status) => {
     switch(status) {
       case 'bekliyor': return '<span class="badge badge-warning">🟡 Bekliyor</span>';
-      case 'goruldu': return '<span class="badge badge-info">🔵 Görüldü</span>';
       case 'kabul': return '<span class="badge badge-success">🟢 Kabul Edildi</span>';
       case 'reddedildi': return '<span class="badge badge-error">🔴 Reddedildi</span>';
-      default: return '';
+      default: return `<span class="badge">${status}</span>`;
     }
   }
 
   container.innerHTML = `
     <div class="fade-in">
-      <h2 style="margin-bottom: 2rem;">Başvurularım</h2>
-      <div class="roles-grid list-view">
-        ${myApps.map(app => {
-          const listing = dbListings.find(l => l.id === app.listingId);
-          if (!listing) return '';
-          return `
-            <div class="card" style="display: flex; flex-direction: column; gap: 1rem; opacity: ${listing.isActive ? '1' : '0.6'};">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0;">${listing.location}</h3>
-                ${getStatusBadge(app.status, listing.isActive)}
+      <h2 style="margin-bottom: 2rem;">Başvuru ve Davet Takibi</h2>
+      
+      <!-- Section 1: Received Applications/Invitations -->
+      <h3 style="margin-bottom: 1.5rem; color: var(--primary); font-size: 1.25rem;">
+        ${isOwner ? 'Gelen İlan Başvuruları' : 'Ev Sahiplerinden Gelen Davetler'}
+      </h3>
+      
+      ${receivedData.length === 0 ? `
+        <div class="card mb-8" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+          <p>Henüz gelen bir başvuru veya davet bulunmuyor.</p>
+        </div>
+      ` : `
+        <div style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 3rem;">
+          ${receivedData.map(data => {
+            const profileName = data.profile ? data.profile.displayName : (isOwner ? 'Gezgin' : 'Ev Sahibi');
+            const profilePhone = data.profile && data.profile.phone ? data.profile.phone : 'Belirtilmemiş';
+            const profileEmail = isOwner 
+              ? (data.applicantEmail || (data.profile ? data.profile.email : '') || 'Belirtilmemiş') 
+              : ((data.profile && data.profile.email) || (data.invitationListing ? data.invitationListing.ownerEmail : '') || 'Belirtilmemiş');
+            const whatsAppNum = data.profile && data.profile.phone ? formatWhatsAppNumber(data.profile.phone) : '';
+
+            return `
+              <div class="card" style="display: flex; flex-direction: column; gap: 1.25rem; border-left: 5px solid var(--primary);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                  <h4 style="margin: 0; color: var(--text-main); font-size: 1.1rem;">
+                    İlanınız: <span style="color: var(--primary);">${data.targetListing ? data.targetListing.location : 'İlan Detayı'}</span>
+                  </h4>
+                  ${getStatusBadge(data.status)}
+                </div>
+                
+                <!-- Profile Details -->
+                <div style="background: var(--bg-color); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                    <div>
+                      <strong style="font-size: 1rem; color: var(--text-main);">${profileName}</strong>
+                      <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 0.5rem;">(${isOwner ? 'Gezgin' : 'Ev Sahibi'})</span>
+                    </div>
+                    
+                    ${data.profile && data.profile.phone ? `
+                      <div class="contact-actions">
+                        <a href="tel:${data.profile.phone}" class="contact-btn phone-btn" title="Ara">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                        </a>
+                        <a href="https://wa.me/${whatsAppNum}" target="_blank" class="contact-btn whatsapp-btn" title="WhatsApp Mesajı">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                        </a>
+                      </div>
+                    ` : ''}
+                  </div>
+                  
+                  <div style="font-size: 0.875rem; color: var(--text-main); margin-top: 0.5rem;">
+                    <strong>Telefon:</strong> ${profilePhone} | <strong>E-posta:</strong> ${profileEmail}
+                  </div>
+                </div>
+
+                <!-- Invitation Listing Details (If traveler received invitation) -->
+                ${!isOwner && data.invitationListing ? `
+                  <div style="background: rgba(47, 133, 90, 0.05); padding: 1.25rem; border-radius: var(--radius-md); border: 1px dashed var(--primary); margin-top: 0.25rem;">
+                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: var(--primary); font-weight: 600;">Davet Edildiğiniz Ev Sahibi İlanı:</h5>
+                    <div style="font-size: 0.875rem; color: var(--text-main);">
+                      <strong style="color: var(--text-main);">${data.invitationListing.location}</strong>
+                      <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 0.5rem;">(${data.invitationListing.duration})</span>
+                      <p style="margin: 0.5rem 0 0 0; color: var(--text-muted); font-style: italic;">"${data.invitationListing.desc}"</p>
+                      ${data.invitationListing.skills ? `
+                        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                          ${data.invitationListing.skills.map(s => `<span class="badge" style="padding: 0.1rem 0.4rem; font-size: 0.7rem; background: var(--surface); border: 1px solid var(--border-color);">${s}</span>`).join('')}
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                ` : ''}
+
+                <!-- Active Listings of the other party -->
+                ${data.listings && data.listings.length > 0 ? `
+                  <div style="margin-top: 0.5rem;">
+                    <h5 style="margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-main); font-weight: 600;">${isOwner ? 'Gezginin' : 'Ev Sahibinin'} Yayındaki İlanları:</h5>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                      ${data.listings.map(lst => `
+                        <div style="background: var(--bg-color); padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 0.85rem;">
+                          <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem; flex-wrap: wrap;">
+                            <strong style="color: var(--primary);">${lst.location}</strong>
+                            <span style="color: var(--text-muted); font-size: 0.75rem;">${lst.duration}</span>
+                          </div>
+                          <p style="margin: 0; color: var(--text-main);">${lst.desc}</p>
+                          <div style="display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                            ${lst.skills ? lst.skills.map(s => `<span class="badge" style="padding: 0.1rem 0.4rem; font-size: 0.7rem; background: var(--surface); border: 1px solid var(--border-color);">${s}</span>`).join('') : ''}
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : `
+                  <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Aktif yayında olan bir ilanı bulunmuyor.</p>
+                `}
+
+                <!-- Accept/Reject Actions -->
+                ${data.status === 'bekliyor' ? `
+                  <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.8rem; border-color: var(--error); color: var(--error);" onclick="window.rejectApplication('${data.id}', '${isOwner ? data.applicantId : data.listingOwnerId}')">Reddet</button>
+                    <button class="btn btn-primary" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;" onclick="window.acceptApplication('${data.id}', '${isOwner ? data.applicantId : data.listingOwnerId}')">Kabul Et</button>
+                  </div>
+                ` : ''}
               </div>
-              <div style="color: var(--text-muted); font-size: 0.875rem;">
-                <strong>Başvuru Tarihi:</strong> ${app.date} | <strong>İlan Türü:</strong> ${listing.typeLabel}
+            `;
+          }).join('')}
+        </div>
+      `}
+
+      <!-- Section 2: Sent Applications/Invitations -->
+      <h3 style="margin-bottom: 1.5rem; color: var(--text-main); font-size: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 2rem;">
+        ${isOwner ? 'Gezginlere Gönderdiğiniz Davetler' : 'Gönderdiğiniz İlan Başvuruları'}
+      </h3>
+
+      ${sent.length === 0 ? `
+        <div class="card" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+          <p>Henüz gönderdiğiniz bir başvuru veya davet bulunmuyor.</p>
+        </div>
+      ` : `
+        <div class="roles-grid list-view">
+          ${sent.map(app => {
+            const listing = dbListings.find(l => l.id === app.listingId);
+            if (!listing) return '';
+            return `
+              <div class="card" style="display: flex; flex-direction: column; gap: 1rem; opacity: 0.9;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <h3 style="margin: 0; font-size: 1.1rem;">${listing.location}</h3>
+                  ${getStatusBadge(app.status)}
+                </div>
+                <div style="color: var(--text-muted); font-size: 0.85rem;">
+                  <strong>Tarih:</strong> ${app.date} | <strong>İlan Türü:</strong> ${listing.typeLabel}
+                </div>
+                <div style="background: var(--bg-color); padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.85rem;">
+                  ${listing.desc.substring(0, 100)}...
+                </div>
               </div>
-              <div style="background: var(--bg-color); padding: 1rem; border-radius: var(--radius-sm); font-size: 0.875rem;">
-                ${listing.desc.substring(0, 100)}...
-              </div>
-              <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
-                <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.5rem 1rem;" onclick="window.showCustomAlert('Durum', 'Başvurunuz ilan sahibi tarafından değerlendiriliyor. Gelişme olduğunda bu alandan görebilirsiniz.', 'info')">Detaylar</button>
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
+            `;
+          }).join('')}
+        </div>
+      `}
     </div>
   `;
 }
@@ -1670,12 +2002,20 @@ function renderMyListings(container) {
   if (!currentUser) return;
   const myListings = dbListings.filter(l => l.ownerId === currentUser.uid);
   
+  const targetWizard = window.userProfile && window.userProfile.role === 'owner' ? '/owner-wizard' : '/visitor-wizard';
+
   if (myListings.length === 0) {
     container.innerHTML = `
       <div class="fade-in text-center" style="padding: 4rem 0;">
         <h2>Henüz bir ilanınız yok</h2>
         <p class="mb-4">Hemen yeni bir ilan oluşturabilirsiniz.</p>
-        <button class="btn btn-primary mt-4" onclick="navigate('/roles')">İlan Oluştur</button>
+        <button class="btn btn-primary mt-4" onclick="navigate('${targetWizard}')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Yeni İlan Oluştur
+        </button>
       </div>
     `;
     return;
@@ -1683,7 +2023,16 @@ function renderMyListings(container) {
 
   container.innerHTML = `
     <div class="fade-in">
-      <h2 style="margin-bottom: 2rem;">İlanlarım</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+        <h2 style="margin: 0;">İlanlarım</h2>
+        <button class="btn btn-primary" onclick="navigate('${targetWizard}')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Yeni İlan Oluştur
+        </button>
+      </div>
       <div class="roles-grid list-view">
         ${myListings.map(listing => `
           <div class="card" style="display: flex; flex-direction: column; gap: 1rem; opacity: ${listing.isActive ? '1' : '0.6'}; transition: all 0.3s ease;">
@@ -1718,15 +2067,6 @@ window.deleteFeedback = async function(id) {
   }
 }
 
-window.adminLogout = async function() {
-  try {
-    await signOut(auth);
-    window.showCustomAlert('Güvenli Çıkış', 'Yönetici oturumu sonlandırıldı.', 'info');
-  } catch (err) {
-    console.error(err);
-  }
-}
-
 function renderAdminDashboard(container) {
   if (!currentUser || currentUser.email !== 'apieiron@gmail.com') {
     container.innerHTML = `
@@ -1752,14 +2092,6 @@ function renderAdminDashboard(container) {
           <h2 style="margin: 0;">Yönetici Paneli</h2>
           <p style="margin: 0; color: var(--text-muted);">Sistem durumunu ve kullanıcı geri bildirimlerini buradan inceleyebilirsiniz.</p>
         </div>
-        <button class="btn btn-secondary" onclick="window.adminLogout()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-          Güvenli Çıkış
-        </button>
       </div>
 
       <!-- Stats Cards -->
@@ -1879,7 +2211,8 @@ function renderAdminDashboard(container) {
 function renderProfile(container) {
   const nameVal = window.userProfile ? (window.userProfile.displayName || '') : (currentUser ? (currentUser.displayName || '') : '');
   const phoneVal = window.userProfile ? (window.userProfile.phone || '') : '';
-  const isComplete = window.userProfile && window.userProfile.phone;
+  const selectedRole = window.userProfile ? (window.userProfile.role || '') : '';
+  const isComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
 
   container.innerHTML = `
     <div class="fade-in" style="max-width: 500px; margin: 0 auto;">
@@ -1887,7 +2220,7 @@ function renderProfile(container) {
       <p class="text-center mb-8" style="color: var(--text-muted); font-size: 0.95rem;">
         ${isComplete 
           ? 'Profil bilgilerinizi buradan güncelleyebilirsiniz.' 
-          : 'Uygulamayı kullanmaya başlamadan önce lütfen adınızı ve telefon numaranızı giriniz.'}
+          : 'Uygulamayı kullanmaya başlamadan önce lütfen adınızı, telefon numaranızı ve rolünüzü seçiniz.'}
       </p>
 
       <div class="glass-card" style="padding: 2rem;">
@@ -1903,6 +2236,16 @@ function renderProfile(container) {
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Numaranızı başında 0 olacak şekilde 11 hane olarak boşluksuz giriniz.</small>
           </div>
 
+          <div class="form-group">
+            <label class="form-label" for="profile-role">Rolünüz (Zorunlu)</label>
+            <select id="profile-role" class="form-control" required>
+              <option value="">Seçiniz...</option>
+              <option value="owner" ${selectedRole === 'owner' ? 'selected' : ''}>Köyde Yerim Var (Ev Sahibi)</option>
+              <option value="visitor" ${selectedRole === 'visitor' ? 'selected' : ''}>Köye Gitmek İstiyorum (Gezgin)</option>
+            </select>
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Rolünüzü değiştirdiğiniz takdirde diğer roldeki mevcut tüm aktif ilanlarınız otomatik olarak pasifleştirilecektir.</small>
+          </div>
+
           <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
             ${isComplete ? `<button type="button" class="btn btn-secondary" id="btn-profile-cancel" style="flex: 1;">İptal</button>` : ''}
             <button type="submit" class="btn btn-primary" style="flex: 2;">Profilimi Kaydet</button>
@@ -1914,7 +2257,7 @@ function renderProfile(container) {
 
   if (isComplete) {
     document.getElementById('btn-profile-cancel').addEventListener('click', () => {
-      navigate('/roles');
+      navigate('/dashboard');
     });
   }
 
@@ -1922,11 +2265,33 @@ function renderProfile(container) {
     e.preventDefault();
     const name = document.getElementById('profile-name').value.trim();
     const phone = document.getElementById('profile-phone').value.trim();
+    const role = document.getElementById('profile-role').value;
+
+    const currentRole = window.userProfile ? window.userProfile.role : '';
+
+    if (currentRole && currentRole !== role) {
+      const confirmChange = confirm("Rolünüzü değiştirmek istediğinize emin misiniz? Rol değiştiğinde diğer gruptayken vermiş olduğunuz tüm ilanlar pasif hale getirilecektir.");
+      if (!confirmChange) {
+        return;
+      }
+
+      // Deactivate old listings in Firestore
+      const oldListings = dbListings.filter(l => l.ownerId === currentUser.uid && l.type === currentRole && l.isActive);
+      for (const lst of oldListings) {
+        try {
+          await updateDoc(doc(db, 'listings', lst.id), { isActive: false });
+        } catch (err) {
+          console.error("Listing deactivate error:", err);
+        }
+      }
+    }
 
     try {
       const updatedProfile = {
         displayName: name,
         phone: phone,
+        role: role,
+        email: currentUser.email,
         updatedAt: new Date().getTime()
       };
 
@@ -1935,14 +2300,14 @@ function renderProfile(container) {
 
       window.showCustomAlert('Profil Güncellendi', 'Bilgileriniz başarıyla kaydedildi.', 'success');
       
-      // Enable navigation buttons
-      document.getElementById('nav-profile').style.display = 'inline-flex';
-      document.getElementById('nav-listings').style.display = 'inline-flex';
-      document.getElementById('nav-applications').style.display = 'inline-flex';
+      // Enable navigation dropdown & notifications
+      document.getElementById('profile-dropdown-container').style.display = 'inline-block';
       document.getElementById('nav-notifications').style.display = 'inline-flex';
       
       setupRealtimeListeners();
-      navigate('/roles');
+
+      window.customDashboardFilterApplied = false; // Reset to load new default type filter
+      navigate('/dashboard');
     } catch (err) {
       window.showCustomAlert('Hata', 'Profil kaydedilemedi: ' + err.message, 'error');
     }
@@ -1988,11 +2353,15 @@ function renderVerifyEmail(container) {
           window.userProfile = null;
         }
 
-        const isProfileComplete = window.userProfile && window.userProfile.phone;
-        if (!isProfileComplete) {
+        const hasRole = window.userProfile && window.userProfile.role;
+        const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
+        
+        if (!hasRole) {
+          navigate('/roles');
+        } else if (!isProfileComplete) {
           navigate('/profile');
         } else {
-          navigate('/roles');
+          navigate('/dashboard');
         }
       } else {
         window.showCustomAlert('Doğrulanamadı', 'E-posta adresiniz henüz doğrulanmamış görünüyor. Lütfen gelen e-postadaki linke tıklayıp onaylayın.', 'warning');
