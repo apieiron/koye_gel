@@ -102,11 +102,7 @@ function stopRealtimeListeners() {
 }
 
 function triggerRerender() {
-  const path = window.location.pathname;
-  if (path === '/dashboard') renderDashboard(app);
-  else if (path === '/my-listings') renderMyListings(app);
-  else if (path === '/applications') renderApplications(app);
-  else if (path === '/admin') renderAdminDashboard(app);
+  render();
 }
 
 async function seedDefaultListings() {
@@ -212,27 +208,18 @@ onAuthStateChanged(auth, async (user) => {
         window.userProfile = null;
       }
 
-      // Check KVKK status for new users
+      // Initialize user profile doc for new users
       if (!userDocExists) {
-        const kvkkChecked = document.getElementById('kvkk') && document.getElementById('kvkk').checked;
-        if (!kvkkChecked) {
-          await signOut(auth);
-          window.showCustomAlert('KVKK Onayı Gerekli', 'Yeni hesap oluşturmak için lütfen KVKK Aydınlatma Metni\'ni okuyup onaylayınız.', 'error');
-          navigate('/');
-          return;
-        } else {
-          // Initialize user profile doc with KVKK status
-          try {
-            await setDoc(doc(db, 'users', user.uid), { kvkkAccepted: true, email: user.email }, { merge: true });
-            window.userProfile = { kvkkAccepted: true, email: user.email };
-          } catch (err) {
-            console.error("Error creating user profile document:", err);
-          }
+        try {
+          await setDoc(doc(db, 'users', user.uid), { email: user.email }, { merge: true });
+          window.userProfile = { email: user.email };
+        } catch (err) {
+          console.error("Error creating user profile document:", err);
         }
       }
 
       const hasRole = window.userProfile && window.userProfile.role;
-      const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
+      const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role && window.userProfile.kvkkAccepted;
       
       if (!hasRole) {
         document.getElementById('nav-login').style.display = 'inline-flex';
@@ -309,7 +296,7 @@ function render() {
     } else {
       const isGoogleUser = currentUser.providerData.some(p => p.providerId === 'google.com');
       const isEmailVerified = currentUser.emailVerified || isGoogleUser;
-      const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
+      const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role && window.userProfile.kvkkAccepted;
 
       if (!isEmailVerified || !isProfileComplete) {
         document.getElementById('nav-login').style.display = 'inline-flex';
@@ -356,8 +343,8 @@ function render() {
           return;
         }
       } else {
-        // 2. Profile Completeness Guard (requires both phone and role)
-        const isProfileComplete = window.userProfile && window.userProfile.phone;
+        // 2. Profile Completeness Guard (requires phone, role and kvkkAccepted)
+        const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.kvkkAccepted;
         if (!isProfileComplete && path !== '/profile') {
           app.innerHTML = '';
           renderProfile(app);
@@ -377,7 +364,7 @@ function render() {
   // Toggle footer visibility
   const footer = document.getElementById('app-footer');
   if (footer) {
-    const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
+    const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role && window.userProfile.kvkkAccepted;
     const isEmailVerified = currentUser ? (currentUser.emailVerified || currentUser.providerData.some(p => p.providerId === 'google.com')) : false;
     
     if (path === '/' || path === '/admin' || !isEmailVerified || !isProfileComplete) {
@@ -644,12 +631,7 @@ function renderAuthPage(container) {
           
           <div id="cf-turnstile-container" class="mb-4"></div>
           
-          <div class="form-group checkbox-group">
-            <input type="checkbox" id="kvkk" required />
-            <label class="checkbox-label" for="kvkk">
-              <a href="#" id="open-kvkk">KVKK Aydınlatma Metni</a>'ni okudum ve kabul ediyorum.
-            </label>
-          </div>
+
 
           <button type="submit" class="btn btn-primary btn-full mt-4">Giriş Yap / Kayıt Ol</button>
         </form>
@@ -721,11 +703,6 @@ function renderAuthPage(container) {
   })
 
   document.getElementById('btn-google-login').addEventListener('click', async () => {
-    const kvkkCheckbox = document.getElementById('kvkk');
-    if (!kvkkCheckbox || !kvkkCheckbox.checked) {
-      window.showCustomAlert('KVKK Onayı Gerekli', 'Google ile oturum açmadan önce lütfen KVKK Aydınlatma Metni\'ni okuyup onaylayınız.', 'error');
-      return;
-    }
     const provider = new GoogleAuthProvider()
     try {
       await signInWithPopup(auth, provider)
@@ -735,10 +712,6 @@ function renderAuthPage(container) {
     }
   })
 
-  document.getElementById('open-kvkk').addEventListener('click', (e) => {
-    e.preventDefault()
-    window.showCustomAlert('Aydınlatma Metni', 'Bu uygulama, köye dönmek isteyenler ile köyde destek arayanları bir araya getirmek amacıyla kurulmuş kâr amacı gütmeyen bir sosyal projedir. Bilgileriniz üçüncü şahıslarla paylaşılmaz.', 'info')
-  })
 }
 
 function renderRoleSelection(container) {
@@ -2212,7 +2185,7 @@ function renderProfile(container) {
   const nameVal = window.userProfile ? (window.userProfile.displayName || '') : (currentUser ? (currentUser.displayName || '') : '');
   const phoneVal = window.userProfile ? (window.userProfile.phone || '') : '';
   const selectedRole = window.userProfile ? (window.userProfile.role || '') : '';
-  const isComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
+  const isComplete = window.userProfile && window.userProfile.phone && window.userProfile.role && window.userProfile.kvkkAccepted;
 
   container.innerHTML = `
     <div class="fade-in" style="max-width: 500px; margin: 0 auto;">
@@ -2246,6 +2219,13 @@ function renderProfile(container) {
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Rolünüzü değiştirdiğiniz takdirde diğer roldeki mevcut tüm aktif ilanlarınız otomatik olarak pasifleştirilecektir.</small>
           </div>
 
+          <div class="form-group checkbox-group" style="margin-top: 1.5rem; margin-bottom: 1rem;">
+            <input type="checkbox" id="profile-kvkk" ${window.userProfile && window.userProfile.kvkkAccepted ? 'checked' : ''} required />
+            <label class="checkbox-label" for="profile-kvkk" style="color: var(--text-main);">
+              <a href="#" id="open-profile-kvkk" style="color: var(--primary); font-weight: 500; text-decoration: underline;">KVKK Aydınlatma Metni</a>'ni okudum ve kabul ediyorum.
+            </label>
+          </div>
+
           <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
             ${isComplete ? `<button type="button" class="btn btn-secondary" id="btn-profile-cancel" style="flex: 1;">İptal</button>` : ''}
             <button type="submit" class="btn btn-primary" style="flex: 2;">Profilimi Kaydet</button>
@@ -2258,6 +2238,14 @@ function renderProfile(container) {
   if (isComplete) {
     document.getElementById('btn-profile-cancel').addEventListener('click', () => {
       navigate('/dashboard');
+    });
+  }
+
+  const openProfileKvkkBtn = document.getElementById('open-profile-kvkk');
+  if (openProfileKvkkBtn) {
+    openProfileKvkkBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.showCustomAlert('Aydınlatma Metni', 'Bu uygulama, köye dönmek isteyenler ile köyde destek arayanları bir araya getirmek amacıyla kurulmuş kâr amacı gütmeyen bir sosyal projedir. Bilgileriniz üçüncü şahıslarla paylaşılmaz.', 'info');
     });
   }
 
@@ -2291,6 +2279,7 @@ function renderProfile(container) {
         displayName: name,
         phone: phone,
         role: role,
+        kvkkAccepted: true,
         email: currentUser.email,
         updatedAt: new Date().getTime()
       };
@@ -2354,7 +2343,7 @@ function renderVerifyEmail(container) {
         }
 
         const hasRole = window.userProfile && window.userProfile.role;
-        const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role;
+        const isProfileComplete = window.userProfile && window.userProfile.phone && window.userProfile.role && window.userProfile.kvkkAccepted;
         
         if (!hasRole) {
           navigate('/roles');
