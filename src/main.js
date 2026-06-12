@@ -14,6 +14,8 @@ import {
   addDoc,
   getDocs,
   doc,
+  getDoc,
+  setDoc,
   deleteDoc,
   updateDoc,
   query,
@@ -152,7 +154,7 @@ async function seedDefaultListings() {
 }
 
 // Auth State Monitor
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   currentUser = user;
   stopRealtimeListeners();
   
@@ -164,6 +166,7 @@ onAuthStateChanged(auth, (user) => {
       document.getElementById('nav-applications').style.display = 'none';
       document.getElementById('nav-listings').style.display = 'none';
       document.getElementById('nav-notifications').style.display = 'none';
+      document.getElementById('nav-profile').style.display = 'none';
       
       setupRealtimeListeners();
       
@@ -171,22 +174,51 @@ onAuthStateChanged(auth, (user) => {
         navigate('/admin');
       }
     } else {
-      document.getElementById('nav-applications').style.display = 'inline-flex';
-      document.getElementById('nav-listings').style.display = 'inline-flex';
-      document.getElementById('nav-notifications').style.display = 'inline-flex';
+      // Fetch user profile from Firestore
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          window.userProfile = userDoc.data();
+        } else {
+          window.userProfile = null;
+        }
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
+        window.userProfile = null;
+      }
+
+      const isProfileComplete = window.userProfile && window.userProfile.phone;
       
-      setupRealtimeListeners();
-      
-      if (window.location.pathname === '/') {
-        navigate('/roles');
+      if (!isProfileComplete) {
+        document.getElementById('nav-profile').style.display = 'none';
+        document.getElementById('nav-listings').style.display = 'none';
+        document.getElementById('nav-applications').style.display = 'none';
+        document.getElementById('nav-notifications').style.display = 'none';
+        navigate('/profile');
+      } else {
+        document.getElementById('nav-profile').style.display = 'inline-flex';
+        document.getElementById('nav-listings').style.display = 'inline-flex';
+        document.getElementById('nav-applications').style.display = 'inline-flex';
+        document.getElementById('nav-notifications').style.display = 'inline-flex';
+        
+        setupRealtimeListeners();
+        
+        if (window.location.pathname === '/' || window.location.pathname === '/profile') {
+          navigate('/roles');
+        } else {
+          // Trigger rerender to make sure layout updates
+          triggerRerender();
+        }
       }
     }
   } else {
     window.currentUserEmail = null;
+    window.userProfile = null;
     document.getElementById('nav-login').textContent = 'Giriş Yap';
     document.getElementById('nav-applications').style.display = 'none';
     document.getElementById('nav-listings').style.display = 'none';
     document.getElementById('nav-notifications').style.display = 'none';
+    document.getElementById('nav-profile').style.display = 'none';
     
     if (window.location.pathname !== '/') {
       navigate('/');
@@ -204,7 +236,8 @@ const routes = {
   '/dashboard': renderDashboard,
   '/applications': renderApplications,
   '/my-listings': renderMyListings,
-  '/admin': renderAdminDashboard
+  '/admin': renderAdminDashboard,
+  '/profile': renderProfile
 }
 
 function navigate(path) {
@@ -214,7 +247,27 @@ function navigate(path) {
 window.navigate = navigate;
 
 function render() {
-  const path = window.location.pathname
+  const path = window.location.pathname;
+  
+  // Profile Completeness Guard
+  if (currentUser && currentUser.email !== 'apieiron@gmail.com') {
+    const isProfileComplete = window.userProfile && window.userProfile.phone;
+    if (!isProfileComplete && path !== '/profile') {
+      app.innerHTML = '';
+      renderProfile(app);
+      
+      // Hide all nav elements during setup
+      document.getElementById('nav-profile').style.display = 'none';
+      document.getElementById('nav-listings').style.display = 'none';
+      document.getElementById('nav-applications').style.display = 'none';
+      document.getElementById('nav-notifications').style.display = 'none';
+      
+      const footer = document.getElementById('app-footer');
+      if (footer) footer.style.display = 'none';
+      return;
+    }
+  }
+
   const renderer = routes[path] || routes['/']
   app.innerHTML = ''
   renderer(app)
@@ -222,7 +275,7 @@ function render() {
   // Toggle footer visibility
   const footer = document.getElementById('app-footer');
   if (footer) {
-    if (path === '/' || path === '/admin') {
+    if (path === '/' || path === '/admin' || (currentUser && !window.userProfile?.phone)) {
       footer.style.display = 'none';
     } else {
       footer.style.display = 'block';
@@ -385,6 +438,11 @@ document.getElementById('nav-login').addEventListener('click', async (e) => {
 document.getElementById('nav-notifications').addEventListener('click', (e) => {
   e.preventDefault()
   window.openNotificationModal()
+})
+
+document.getElementById('nav-profile').addEventListener('click', (e) => {
+  e.preventDefault()
+  navigate('/profile')
 })
 
 document.getElementById('nav-applications').addEventListener('click', (e) => {
@@ -1675,6 +1733,79 @@ function renderAdminDashboard(container) {
       </div>
     </div>
   `;
+}
+
+function renderProfile(container) {
+  const nameVal = window.userProfile ? (window.userProfile.displayName || '') : (currentUser ? (currentUser.displayName || '') : '');
+  const phoneVal = window.userProfile ? (window.userProfile.phone || '') : '';
+  const isComplete = window.userProfile && window.userProfile.phone;
+
+  container.innerHTML = `
+    <div class="fade-in" style="max-width: 500px; margin: 0 auto;">
+      <h2 class="text-center mb-4">Profil Bilgileri</h2>
+      <p class="text-center mb-8" style="color: var(--text-muted); font-size: 0.95rem;">
+        ${isComplete 
+          ? 'Profil bilgilerinizi buradan güncelleyebilirsiniz.' 
+          : 'Uygulamayı kullanmaya başlamadan önce lütfen adınızı ve telefon numaranızı giriniz.'}
+      </p>
+
+      <div class="glass-card" style="padding: 2rem;">
+        <form id="profile-form">
+          <div class="form-group">
+            <label class="form-label" for="profile-name">Ad Soyad (Zorunlu)</label>
+            <input type="text" id="profile-name" class="form-control" placeholder="Adınız Soyadınız" value="${nameVal}" required />
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="profile-phone">Telefon Numarası (Zorunlu)</label>
+            <input type="tel" id="profile-phone" class="form-control" placeholder="05XXXXXXXXX" pattern="05[0-9]{9}" title="Lütfen 05 ile başlayan 11 haneli telefon numaranızı giriniz (Örn: 05551234567)" value="${phoneVal}" required />
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Numaranızı başında 0 olacak şekilde 11 hane olarak boşluksuz giriniz.</small>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+            ${isComplete ? `<button type="button" class="btn btn-secondary" id="btn-profile-cancel" style="flex: 1;">İptal</button>` : ''}
+            <button type="submit" class="btn btn-primary" style="flex: 2;">Profilimi Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+
+  if (isComplete) {
+    document.getElementById('btn-profile-cancel').addEventListener('click', () => {
+      navigate('/roles');
+    });
+  }
+
+  document.getElementById('profile-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('profile-name').value.trim();
+    const phone = document.getElementById('profile-phone').value.trim();
+
+    try {
+      const updatedProfile = {
+        displayName: name,
+        phone: phone,
+        updatedAt: new Date().getTime()
+      };
+
+      await setDoc(doc(db, 'users', currentUser.uid), updatedProfile, { merge: true });
+      window.userProfile = updatedProfile;
+
+      window.showCustomAlert('Profil Güncellendi', 'Bilgileriniz başarıyla kaydedildi.', 'success');
+      
+      // Enable navigation buttons
+      document.getElementById('nav-profile').style.display = 'inline-flex';
+      document.getElementById('nav-listings').style.display = 'inline-flex';
+      document.getElementById('nav-applications').style.display = 'inline-flex';
+      document.getElementById('nav-notifications').style.display = 'inline-flex';
+      
+      setupRealtimeListeners();
+      navigate('/roles');
+    } catch (err) {
+      window.showCustomAlert('Hata', 'Profil kaydedilemedi: ' + err.message, 'error');
+    }
+  });
 }
 
 // Initial render
